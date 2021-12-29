@@ -7,35 +7,8 @@
 */
 
 #include "GPIO.h"
+#include "MYHEADER.h"
 
-#define A (0)
-#define B (1)
-
-
-#define REG(BASE,OFFSET) 		   *((unsigned int*)(BASE + OFFSET))
-
-#define RCC 			(0x40023800) /*RCC Base*/
-#define RCC_APB2ENR		(0x44)		/*RCC_APB2ENR Offset*/
-
-#define SYSCFG			(0x40013800)	/*SYSCFG Base*/
-#define SYSCFG_EXTICR1 	(0x08)			/*SYSCFG_EXTICR1 Offset*/
-
-#define EXTI			(0x40013C00)	/*External interrupt Base*/
-
-/*External Interrupt registers Offsets*/
-
-#define EXTI_IMR		(0x00)
-#define EXTI_EMR		(0x04)
-#define EXTI_RSTR		(0x08)
-#define EXTI_FSTR		(0x0C)
-#define EXTI_SWIER		(0x10)
-#define EXTI_PR			(0x14)
-
-#define NVIC			(0xE000E100)	/*Nested Vector Interrupt Controller Base*/
-#define NVIC_ISER0		(0x00)			/*interrupt set enable register 0 Offset*/
-
-void SevenSeg_Init(); /*seven segment initialization function declaration*/
-void sevenSeg_display(unsigned char value); /*seven segment display function declaration*/
 
 const unsigned char sevenSegHex[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66,
 			                                   0x6D, 0x7D, 0x07, 0x7F, 0x6F};	/*look-up array for seven-segment */
@@ -68,10 +41,22 @@ int main(void) {
 
 	SevenSeg_Init();	/*seven segment initialization function call*/
 
-	sevenSeg_display(counter);	/*display the initial value of the counter*/
-
+	unsigned char i,copy;
 
   while (1) {
+
+	  REG(NVIC,NVIC_ICER0) |= (1<<7);	/*disable external interrupt 1 */
+	  REG(NVIC,NVIC_ICER0) |= (1<<6);	/*disable external interrupt 0 */
+
+	  copy=counter;		/*copy counter value*/
+
+	  REG(NVIC,NVIC_ISER0) |= (1<<6);	/*enable external interrupt 0 */
+	  REG(NVIC,NVIC_ISER0) |= (1<<7);	/*enable external interrupt 1 */
+
+	  for (i = 0; i < 7; i++){
+		  	  GPIO_WritePin(B, i, (sevenSegHex[copy] & (1 << i)) >> i);		/*display counter value we copied*/
+	  	  }
+	  	 	 	 	 	 	 /*write 0 or 1 to each pin of the seven segment depending on the hex value*/
 
   }
   return 0;
@@ -84,43 +69,39 @@ void SevenSeg_Init(){
 	  unsigned char i=0;
 	  GPIO_EnableClock(B);
 	  for (; i < 7; i++) {
-		  GPIO_Init(B, i, OUTPUT, PUSH_PULL);
+		  GPIO_Init(B, i, OUTPUT, PUSH_PULL);		/*configure seven segment pins*/
 	  }
 }
 
 
-void sevenSeg_display(unsigned char value){
-	 unsigned char i=0;							/*seven segment display function definition*/
-	 for (i = 0; i < 7; i++){
-			            GPIO_WritePin(B, i, (sevenSegHex[value] & (1 << i)) >> i);
-			    }
-	 	 	 	 	 	 /*write 0 or 1 to each pin of the seven segment depending on the hex value*/
-}
-
 
 void EXTI0_IRQHandler (void){
-	REG(NVIC,NVIC_ISER0) &= ~(1<<7);	/*disable external interrupt 1 */
+
+	REG(NVIC,NVIC_ICER0) |= (1<<7);	/*disable external interrupt 1 */
 
 	counter++;
+						/*incrementing the counter and setting it to 0 if it's greater than 9*/
 	if(counter>9){
 		counter=0;
 	}
-	sevenSeg_display(counter);
 	REG(NVIC,NVIC_ISER0) |= (1<<7);	/*enable external interrupt 1 */
+
+	REG(EXTI,EXTI_PR)|= (1<<0);	/*clearing the flag for interrupt 0*/
 }
 
 
 void EXTI1_IRQHandler (void){
-	REG(NVIC,NVIC_ISER0) &= ~(1<<6);	/*disable external interrupt 0 */
+	REG(NVIC,NVIC_ICER0) |= (1<<6);	/*disable external interrupt 0 */
 
 	if(0==counter){
 			counter=9;
 		}
-	else {
+	else {						/*decrementing the counter and setting it to 9 if it's already equal 0*/
 		counter--;
 	}
-	sevenSeg_display(counter);
 
 	REG(NVIC,NVIC_ISER0) |= (1<<6);	/*enable external interrupt 0 */
+
+	REG(EXTI,EXTI_PR)|= (1<<1); 	/*clearing the flag for interrupt 1*/
 
 }
