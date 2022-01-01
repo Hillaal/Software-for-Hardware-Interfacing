@@ -1,4 +1,4 @@
-#stm32f401CC USART
+# STM32F401CC USART
 
 getting introduced to stm32f401CC USART registers.
 
